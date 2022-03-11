@@ -1,0 +1,82 @@
+/*
+This code is designed to control a conveyor system
+*/
+// Define pins for ultrasonic
+int const trigPin = 10; //trigger pin for start sensor
+int const echoPin = 9; // echo pin for start sensor
+int const trigPin1 = 12; //trigger pin for stop sensor
+int const echoPin1 = 11; //echo pin for stop sensor
+int motorPin = 4; //conveyor belt motor
+int const buttonPin = 2; //ON pushbutton pin
+int const buttonPin1 = 3; //Off pushbutton pin
+int const GreenledPin = 5; //system ON LED pin
+int const YellowledPin = 6; //motor ON LED pin
+int const RedledPin = 7; // system OFF LED pin
+boolean Redbuttonstate = LOW;
+boolean Blackbuttonstate = LOW;
+boolean controlstate = LOW;
+// variables will change:
+//int ONbuttonState = 1; // variable for reading the pushbutton status
+//int OFFbuttonState = 1; // variable for reading the pushbutton status
+void setup() {
+pinMode(trigPin, OUTPUT); // trig pin will have pulses output for start sensor
+pinMode(echoPin, INPUT); // echo pin should be input to get pulse width for the start sensor
+pinMode(trigPin1, OUTPUT); // trig pin will have pulses output for the stop sensor
+pinMode(echoPin1, INPUT); // echo pin should be input to get pulse width for the stop sensor
+pinMode(motorPin, OUTPUT); // motor pin
+pinMode(GreenledPin, OUTPUT); // system ON LED
+pinMode(YellowledPin, OUTPUT); // motor ON LED
+pinMode(RedledPin, OUTPUT); // system OFF LED
+pinMode(buttonPin, INPUT); // ON push button(momentary)
+pinMode(buttonPin1, INPUT); // OFF push button(momentary)
+}
+
+void loop() {
+Redbuttonstate = digitalRead(buttonPin);
+Blackbuttonstate = digitalRead(buttonPin1);
+//if button is pressed system should be on and allow motor to be turned on and off by the start and stop sensors
+if (Redbuttonstate == HIGH) {
+digitalWrite(controlstate, HIGH); //red button is the ON button so controlstate is HIGH to allow the conveyor system to operate
+}
+if (Blackbuttonstate == HIGH) {
+digitalWrite(controlstate, LOW); //black button is the OFF button so controlstate is LOW to enable red LED and not allow conveyor system to operate.
+}
+while (controlstate = HIGH) {
+// Duration will be the input pulse width and distance will be the distance to the obstacle in centimeters
+int duration, distance; // distance and duration for the START sensor
+// Output pulse with 1ms width on trigPin
+digitalWrite(trigPin, HIGH);
+delay(1);
+digitalWrite(trigPin, LOW);
+// Measure the pulse input in echo pin
+duration = pulseIn(echoPin, HIGH);
+// Distance is half the duration devided by 29.1
+distance = (duration/2) / 29.1; //distance of object from Start sensor
+int duration1, distance1; // distance and duration for the STOP sensor
+// Output pulse with 1ms width on trigPin
+digitalWrite(trigPin1, HIGH);
+delay(1);
+digitalWrite(trigPin1, LOW);
+// Measure the pulse input in echo pin
+duration1 = pulseIn(echoPin1, HIGH);
+// Distance is half the duration devided by 29.1
+distance1 = (duration1/2) / 29.1; // distance of object from STOP sensor
+digitalWrite(GreenledPin, HIGH); //green LED ON because system is active
+
+if (distance <= 10 && distance >= 0) {
+digitalWrite(motorPin, HIGH); // if START sensor detects an object within 10cm motor is activated and belt begins to turn
+digitalWrite(YellowledPin, HIGH); // Yellow LED is on indicating that the conveyor bely is in motion
+}
+if (distance1 <= 10 && distance1 >= 0) {
+// Motor off
+digitalWrite(motorPin, LOW); // if STOP sensor detects an object within 10 cm motor should turn OFF
+digitalWrite(YellowledPin, LOW); //Yellow LED off because the system is no longer in motion
+}
+delay(60);
+}
+
+while (controlstate == LOW) {
+digitalWrite(RedledPin, HIGH); // Red LED is off while the system is off
+}
+
+}
