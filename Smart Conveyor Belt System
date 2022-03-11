@@ -2,7 +2,7 @@
 This code is designed to control a conveyor system
 */
 // Define pins for ultrasonic
-int const trigPin = 10; 
+int const trigPin = 10; //trigger pin for start sensor
 int const echoPin = 9; // echo pin for start sensor
 int const trigPin1 = 12; //trigger pin for stop sensor
 int const echoPin1 = 11; //echo pin for stop sensor
