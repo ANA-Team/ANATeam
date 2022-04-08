@@ -1,82 +1,419 @@
+#include <Arduino.h>
+
+/*  INSTRUCTIONS:
+    0. You'll need those libraries installed: 
+        - Blynk Library: https://github.com/blynkkk/blynk-library
+        - StepperDriver Library: https://github.com/laurb9/StepperDriver
+        - Setup ESP8266 environment on Arduino: https://www.instructables.com/Quick-Start-Guide-to-Arduino-IDE-With-NodeMCU-ESP8/
+    1. Configure all pinouts
+    2. Configure Stepper Motor Specs.
+    3. Configure skecth fields:
+        a. WiFi credentials (ssid and pass).
+        b. Blynk Token (auth).
+    4. Configure Blynk application:
+        c. Set Virtual Pins: 
+            - attach V1 to Start button widget.
+            - attach V2 to Stop button widget.
+
+
+    A: The code wont kick off until being connected successfully to WiFi, then Blynk server.
+ */
+/************************ STEPPER START **********************************/
+
+// Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
+#define MOTOR_STEPS 200
+#define RPM 120
+// Microstepping mode. If you hardwired it to save pins, set to the same value here.
+#define MICROSTEPS 16
+
+/* STEPPER MOTOR PINS */
+constexpr uint8_t DIR = D4;
+constexpr uint8_t STEP = D2;
+
+// #define SLEEP 13 // optional (just delete SLEEP from everywhere if not used)
+
 /*
-This code is designed to control a conveyor system
-*/
+ * Choose one of the sections below that match your board
+ */
+
+// #include "DRV8834.h"
+// #define M0 10
+// #define M1 11
+// DRV8834 stepper(MOTOR_STEPS, DIR, STEP, SLEEP, M0, M1);
+
+#include "A4988.h"
+#define MS1 10
+#define MS2 11
+#define MS3 12
+A4988 stepper(MOTOR_STEPS, DIR, STEP /* , SLEEP, MS1, MS2, MS3 */);
+
+// #include "DRV8825.h"
+// #define MODE0 10
+// #define MODE1 11
+// #define MODE2 12
+// DRV8825 stepper(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+
+// #include "DRV8880.h"
+// #define M0 10
+// #define M1 11
+// #define TRQ0 6
+// #define TRQ1 7
+// DRV8880 stepper(MOTORS_STEPS, DIR, STEP, SLEEP, M0, M1, TRQ0, TRQ1);
+
+// #include "BasicStepperDriver.h" // generic
+// BasicStepperDriver stepper(DIR, STEP);
+
+/************************ STEPPER END **********************************/
+
+/************************ BLYNK START **********************************/
+
+#define BLYNK_PRINT Serial
+
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+
+// You should get Auth Token in the Blynk App.
+// Go to the Project Settings (nut icon).
+#define BLYNK_TEMPLATE_ID "TMPLD1SVl5Q0"
+#define BLYNK_DEVICE_NAME "NodeMCU"
+#define BLYNK_AUTH_TOKEN "05uR1D3kj-iow8T_sshny0AfQuIavnMJ"
+char auth[] = BLYNK_AUTH_TOKEN;
+// This function is called every time the device is connected to the Blynk.Cloud
+// BLYNK_CONNECTED()
+// {
+//   // Change Web Link Button message to "Congratulations!"
+//   Blynk.setProperty(V3, "offImageUrl", "https://static-image.nyc3.cdn.digitaloceanspaces.com/general/fte/congratulations.png");
+//   Blynk.setProperty(V3, "onImageUrl",  "https://static-image.nyc3.cdn.digitaloceanspaces.com/general/fte/congratulations_pressed.png");
+//   Blynk.setProperty(V3, "url", "https://docs.blynk.io/en/getting-started/what-do-i-need-to-blynk/how-quickstart-device-was-made");
+// }
+
+// Your WiFi credentials.
+// Set password to "" for open networks.
+//char ssid[] = "220culver_EXT";
+//char pass[] = "Dontaskmeplease";
+char ssid[] = "Amino";
+char pass[] = "88886666";
+
+
+/************************ BLYNK END **********************************/
+
+/************************ PROJECT  **********************************/
 // Define pins for ultrasonic
-int const trigPin = 10; //trigger pin for start sensor
-int const echoPin = 9; // echo pin for start sensor
-int const trigPin1 = 12; //trigger pin for stop sensor
-int const echoPin1 = 11; //echo pin for stop sensor
-int motorPin = 4; //conveyor belt motor
-int const buttonPin = 2; //ON pushbutton pin
-int const buttonPin1 = 3; //Off pushbutton pin
-int const GreenledPin = 5; //system ON LED pin
-int const YellowledPin = 6; //motor ON LED pin
-int const RedledPin = 7; // system OFF LED pin
-boolean Redbuttonstate = LOW;
-boolean Blackbuttonstate = LOW;
-boolean controlstate = LOW;
-// variables will change:
-//int ONbuttonState = 1; // variable for reading the pushbutton status
-//int OFFbuttonState = 1; // variable for reading the pushbutton status
-void setup() {
-pinMode(trigPin, OUTPUT); // trig pin will have pulses output for start sensor
-pinMode(echoPin, INPUT); // echo pin should be input to get pulse width for the start sensor
-pinMode(trigPin1, OUTPUT); // trig pin will have pulses output for the stop sensor
-pinMode(echoPin1, INPUT); // echo pin should be input to get pulse width for the stop sensor
-pinMode(motorPin, OUTPUT); // motor pin
-pinMode(GreenledPin, OUTPUT); // system ON LED
-pinMode(YellowledPin, OUTPUT); // motor ON LED
-pinMode(RedledPin, OUTPUT); // system OFF LED
-pinMode(buttonPin, INPUT); // ON push button(momentary)
-pinMode(buttonPin1, INPUT); // OFF push button(momentary)
+constexpr uint8_t Ultrasonic_1_trigPin = D3; // trigger pin for start sensor
+constexpr uint8_t Ultrasonic_1_echoPin = D1;  // echo pin for start sensor (attached to pin 2)?
+
+constexpr uint8_t Ultrasonic_2_trigPin = D5; // trigger pin for stop sensor
+constexpr uint8_t Ultrasonic_2_echoPin = D6; // echo pin for stop sensor
+
+constexpr uint8_t GreenledPin = D7;         // system ON LED pin
+constexpr uint8_t YellowledPin = D8;        // motor ON LED pin
+constexpr uint8_t RedledPin = D0;           // system OFF LED pin
+
+constexpr uint8_t distanceThreshold = 10; // Distance Threshold to detect a near object in cm.
+
+
+
+bool stateSwitching = true;
+
+enum ProximitySensorPoint : uint8_t
+{
+    startPoint = 1,
+    stopPoint
+};
+
+enum System_State : uint8_t
+{
+    deactivated,     // Deactivated state, waiting for Activate Button click.
+    activated_rest,  // Waiting an object on Start Sensor position, or a signal on deactivate button.
+    activated_moving // Waiting Either an object on End sensor position, or a signal on deactivate button.
+};
+System_State systemState;
+
+enum Button : uint8_t 
+{
+    START_BUTTON,
+    STOP_BUTTON
+};
+
+enum ButtonEvent : uint8_t
+{
+    START_CLICKED,
+    STOP_CLICKED,
+    REST
+};
+ButtonEvent bEvent = REST;
+
+constexpr uint8_t debounceTimeout = 50;
+
+bool debounceButton(uint8_t buttonPin);
+bool getButtonState(Button button);
+void deactivatedState();
+void movingMotorState();
+void activatedState();
+bool isProximateObject(ProximitySensorPoint point);
+void activateMotor();
+void stopMotor();
+void stepperSetup();
+void stepperLoop();
+
+/* Configure it as START PIN */
+BLYNK_WRITE(V1)
+{
+  int pinValue = param.asInt(); // assigning incoming value from pin V1 to a variable
+
+    if (pinValue == 1)
+    {
+        bEvent = START_CLICKED;
+    }
 }
 
-void loop() {
-Redbuttonstate = digitalRead(buttonPin);
-Blackbuttonstate = digitalRead(buttonPin1);
-//if button is pressed system should be on and allow motor to be turned on and off by the start and stop sensors
-if (Redbuttonstate == HIGH) {
-digitalWrite(controlstate, HIGH); //red button is the ON button so controlstate is HIGH to allow the conveyor system to operate
-}
-if (Blackbuttonstate == HIGH) {
-digitalWrite(controlstate, LOW); //black button is the OFF button so controlstate is LOW to enable red LED and not allow conveyor system to operate.
-}
-while (controlstate = HIGH) {
-// Duration will be the input pulse width and distance will be the distance to the obstacle in centimeters
-int duration, distance; // distance and duration for the START sensor
-// Output pulse with 1ms width on trigPin
-digitalWrite(trigPin, HIGH);
-delay(1);
-digitalWrite(trigPin, LOW);
-// Measure the pulse input in echo pin
-duration = pulseIn(echoPin, HIGH);
-// Distance is half the duration devided by 29.1
-distance = (duration/2) / 29.1; //distance of object from Start sensor
-int duration1, distance1; // distance and duration for the STOP sensor
-// Output pulse with 1ms width on trigPin
-digitalWrite(trigPin1, HIGH);
-delay(1);
-digitalWrite(trigPin1, LOW);
-// Measure the pulse input in echo pin
-duration1 = pulseIn(echoPin1, HIGH);
-// Distance is half the duration devided by 29.1
-distance1 = (duration1/2) / 29.1; // distance of object from STOP sensor
-digitalWrite(GreenledPin, HIGH); //green LED ON because system is active
 
-if (distance <= 10 && distance >= 0) {
-digitalWrite(motorPin, HIGH); // if START sensor detects an object within 10cm motor is activated and belt begins to turn
-digitalWrite(YellowledPin, HIGH); // Yellow LED is on indicating that the conveyor bely is in motion
-}
-if (distance1 <= 10 && distance1 >= 0) {
-// Motor off
-digitalWrite(motorPin, LOW); // if STOP sensor detects an object within 10 cm motor should turn OFF
-digitalWrite(YellowledPin, LOW); //Yellow LED off because the system is no longer in motion
-}
-delay(60);
+/* Configure it as STOP PIN */
+BLYNK_WRITE(V2)
+{
+  int pinValue = param.asInt(); // assigning incoming value from pin V1 to a variable
+
+    if (pinValue == 1)
+    {
+        bEvent = STOP_CLICKED;
+    }
 }
 
-while (controlstate == LOW) {
-digitalWrite(RedledPin, HIGH); // Red LED is off while the system is off
+bool getButtonState(Button button)
+{
+    auto ret = bEvent == ((button == START_BUTTON) ? START_CLICKED : STOP_CLICKED);
+    if (bEvent != REST)
+    {
+        bEvent = REST;
+    }
+    return ret;
 }
 
+void activateMotor()
+{
+    // set the motor to move continuously for a reasonable time to hit the stopper
+    // let's say 100 complete revolutions (arbitrary number)
+    // stepper.startMove(100 * MOTOR_STEPS * MICROSTEPS); // in microsteps
+    stepper.startRotate(100 * 360);                     // or in degrees
+}
+
+void stopMotor()
+{
+    stepper.stop();
+}
+void stepperSetup()
+{
+    stepper.begin(RPM, MICROSTEPS);
+    // if using enable/disable on ENABLE pin (active LOW) instead of SLEEP uncomment next line
+    // stepper.setEnableActiveState(LOW);
+    stepper.enable();
+
+    // set current level (for DRV8880 only). Valid percent values are 25, 50, 75 or 100.
+    // stepper.setCurrent(100);
+
+    Serial.println("START");
+}
+
+void stepperLoop()
+{
+    // motor control loop - send pulse and return how long to wait until next pulse
+    unsigned wait_time_micros = stepper.nextAction();
+
+    // 0 wait time indicates the motor has stopped
+    if (wait_time_micros <= 0)
+    {
+        if (systemState == activated_moving)
+        {
+            activateMotor();                     // or in degrees
+        }
+        
+        /*         
+        stepper.disable(); // comment out to keep motor powered
+        delay(3600000); 
+        */
+    }
+
+    /* 
+    // (optional) execute other code if we have enough time
+    if (wait_time_micros > 100)
+    {
+        // other code here
+    }
+    */
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    pinMode(Ultrasonic_1_trigPin, OUTPUT); // trig pin will have pulses output for start sensor
+    pinMode(Ultrasonic_1_echoPin, INPUT);  // echo pin should be input to get pulse width for the start sensor
+    pinMode(Ultrasonic_2_trigPin, OUTPUT); // trig pin will have pulses output for the stop sensor
+    pinMode(Ultrasonic_2_echoPin, INPUT);  // echo pin should be input to get pulse width for the stop sensor
+
+    pinMode(GreenledPin, OUTPUT);  // system ON LED
+    pinMode(YellowledPin, OUTPUT); // motor ON LED
+    pinMode(RedledPin, OUTPUT);    // system OFF LED
+
+
+
+
+  Blynk.begin(auth, ssid, pass, "blynk.cloud");
+    stepperSetup();
+}
+
+void loop()
+{
+    Blynk.run();
+
+    switch (systemState)
+    {
+    case deactivated:
+        deactivatedState();
+        break;
+    case activated_rest:
+        activatedState();
+        break;
+    case activated_moving:
+        movingMotorState();
+        break;
+    default:
+        break;
+    }
+    stepperLoop();
+}
+
+
+void deactivatedState()
+{
+    if (stateSwitching)
+    {
+        digitalWrite(RedledPin, HIGH);
+        stateSwitching = false;
+    }
+
+    // Listen for Activate Button
+    if (getButtonState(START_BUTTON))
+    {
+        digitalWrite(RedledPin, LOW); // Turn off the RED LED.
+        systemState = activated_rest;
+        stateSwitching = true;
+    }
+}
+
+// ultrasonicNumber (1: Start), (2: Stop)
+bool isProximateObject(ProximitySensorPoint point)
+{
+    if (!(point == startPoint || point == stopPoint))
+        return false;
+
+    uint8_t echoPin = (point == startPoint) ? Ultrasonic_1_echoPin : Ultrasonic_2_echoPin;
+    uint8_t trigPin = (point == startPoint) ? Ultrasonic_1_trigPin : Ultrasonic_2_trigPin;
+
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    // Sets the trigPin HIGH (ACTIVE) for 10 microseconds
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+    // Reads the echoPin, returns the sound wave travel time in microseconds
+    float duration = pulseIn(echoPin, HIGH);
+    // Calculating the distance
+    float distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
+    // Displays the distance on the Serial Monitor
+    Serial.print("Ultrasonic-");
+    Serial.print((int)point);
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+
+/*     if (point == stopPoint)
+    {
+        static int count = 0;
+        count++;
+        Serial.printf("count=%d", count);
+        if (count == 10)
+        {
+            count = 0;
+            return true;
+        }
+        return false;
+    } */
+    return (distance < distanceThreshold);
+}
+void activatedState()
+{
+    if (stateSwitching)
+    {
+        digitalWrite(GreenledPin, HIGH);
+        stateSwitching = false;
+    }
+
+    // Listen for Activate Button
+    if (getButtonState(STOP_BUTTON))
+    {
+        digitalWrite(GreenledPin, LOW); // Turn off the RED LED.
+        systemState = deactivated;
+        stateSwitching = true;
+    }
+
+    // Listen for Start Ultrasonic
+    if (isProximateObject(ProximitySensorPoint::startPoint))
+    {
+        systemState = activated_moving;
+        stateSwitching = true;
+    }
+}
+
+void movingMotorState()
+{
+    if (stateSwitching)
+    {
+        // digitalWrite(motorPin, HIGH);
+        activateMotor();
+        digitalWrite(YellowledPin, HIGH);
+        stateSwitching = false;
+    }
+
+    // Listen for Activate Button
+    if (getButtonState(STOP_BUTTON))
+    {
+        digitalWrite(YellowledPin, LOW); // Turn off the RED LED.
+        systemState = deactivated;
+        // digitalWrite(motorPin, LOW);
+        stopMotor();
+        stateSwitching = true;
+    }
+
+    // Listen for Start Ultrasonic
+    if (isProximateObject(ProximitySensorPoint::stopPoint))
+    {
+        digitalWrite(YellowledPin, LOW); // Turn off the RED LED.
+        // digitalWrite(motorPin, LOW);
+        stopMotor();
+        systemState = activated_rest;
+        stateSwitching = true;
+    }
+}
+
+
+
+
+/* UNUSED FUNCTION */
+
+bool debounceButton(uint8_t buttonPin)
+{
+    static uint32_t startTime = 0U;
+    bool buttonState = digitalRead(buttonPin);
+    if (buttonState)
+    {
+        if (!startTime)
+            startTime = millis();
+    }
+    else if (startTime) // if time is captured on click.
+    {
+        bool retVal = millis() - startTime >= debounceTimeout;
+        startTime = 0U; // reset the timer
+        return retVal;
+    }
+    return false;
 }
